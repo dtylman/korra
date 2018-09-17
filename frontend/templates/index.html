@@ -49,16 +49,7 @@
     </table>
   </div>
 </div>
-
-<script type="text/javascript" class="init">
-	
-
-  $(document).ready(function() {
-    $('#example').DataTable();
-  } );
-  
-  
-    </script>
+<script type="text/javascript"> requirejs(["datatables"], function() { var oTable= $('#example').dataTable({ }); }); </script>
     
 
 

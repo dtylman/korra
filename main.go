@@ -4,14 +4,17 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/dtylman/korra/simpleauth"
+
 	"github.com/dtylman/korra/renderer"
+	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
 )
 
-func postLogin(c echo.Context) error {
+func loginPost(c echo.Context) error {
 	username := c.FormValue("username")
 	sess, _ := session.Get("session", c)
 	sess.Values["user"] = username
@@ -20,7 +23,7 @@ func postLogin(c echo.Context) error {
 	return c.Redirect(http.StatusFound, "/")
 }
 
-func login(c echo.Context) error {
+func loginGet(c echo.Context) error {
 	data := map[string]interface{}{
 		"Title": "Login",
 	}
@@ -59,18 +62,21 @@ func work() error {
 
 	e.Use(middleware.LoggerWithConfig(logconf))
 	e.Use(middleware.Recover())
+
 	// e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
 	// 	TokenLookup: "header:X-XSRF-TOKEN",
 	// }))
 
-	e.Use(session.Middleware(sessions.NewCookieStore([]byte("secret"))))
+	cs := sessions.NewCookieStore(securecookie.GenerateRandomKey(24))
+	cs.MaxAge(20 * 60) // 20 minutes
+	e.Use(session.Middleware(cs))
 
 	e.Static("assets", "frontend/tabler/assets")
 	e.Static("/", "frontend")
 
-	e.GET("/", index)
-	e.GET("/login", login)
-	e.POST("/login", postLogin)
+	e.GET("/", index, simpleauth.Middleware)
+	e.GET("/login", loginGet)
+	e.POST("/login", loginPost)
 
 	return e.Start(":8000")
 }

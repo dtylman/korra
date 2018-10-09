@@ -8,9 +8,20 @@ import (
 	"github.com/dtylman/korra/cookiestore"
 	"github.com/dtylman/korra/renderer"
 	"github.com/labstack/echo"
-	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
 )
+
+func pageData(c echo.Context, title string) map[string]interface{} {
+	data := map[string]interface{}{
+		"Title": title,
+	}
+	user, err := auth.LoggedUser(c)
+	if err == nil {
+		data["UserName"] = user.Name
+		data["UserRole"] = user.Role
+	}
+	return data
+}
 
 func loginPost(c echo.Context) error {
 	username := c.FormValue("username")
@@ -35,14 +46,15 @@ func loginGet(c echo.Context) error {
 }
 
 func logoutGet(c echo.Context) error {
-	return auth.Logout(c)
+	err := auth.Logout(c)
+	if err != nil {
+		return err
+	}
+	return c.Redirect(http.StatusFound, "/")
 }
 
 func indexGet(c echo.Context) error {
-
-	data := map[string]interface{}{
-		"Title": "Lala",
-	}
+	data := pageData(c, "Korra")
 	return c.Render(http.StatusOK, "index.html", data)
 }
 
@@ -66,9 +78,9 @@ func startServer() error {
 	// 	TokenLookup: "header:X-XSRF-TOKEN",
 	// }))
 
-	cookiestore.Store.MaxAge(20 * 60)
+	cookiestore.MaxAge(20 * 60)
 
-	e.Use(session.Middleware(cookiestore.Store))
+	e.Use(cookiestore.Middleware())
 
 	e.Static("assets", "frontend/tabler/assets")
 	e.Static("/", "frontend")
@@ -78,6 +90,7 @@ func startServer() error {
 	e.GET("/login", loginGet)
 	e.POST("/login", loginPost)
 	e.GET("/logout", logoutGet)
+
 	return e.Start(":8000")
 }
 

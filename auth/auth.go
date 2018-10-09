@@ -27,8 +27,8 @@ func Middleware(next echo.HandlerFunc) echo.HandlerFunc {
 
 //User ...
 type User struct {
-	Name     string
-	Password string
+	Name string
+	Role string
 }
 
 func init() {
@@ -57,7 +57,7 @@ func DoLogin(username string, password string, c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	sess.Values["user"] = &User{Name: username}
+	sess.Values["user"] = &User{Name: username, Role: "User"}
 	sess.Save(c.Request(), c.Response())
 	log.Printf("user '%v' logged in", username)
 	return nil

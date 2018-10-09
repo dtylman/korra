@@ -4,11 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/dtylman/korra/simpleauth"
-
+	"github.com/dtylman/korra/auth"
+	"github.com/dtylman/korra/cookiestore"
 	"github.com/dtylman/korra/renderer"
-	"github.com/gorilla/securecookie"
-	"github.com/gorilla/sessions"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
@@ -16,10 +14,16 @@ import (
 
 func loginPost(c echo.Context) error {
 	username := c.FormValue("username")
-	sess, _ := session.Get("session", c)
-	sess.Values["user"] = username
-	sess.Save(c.Request(), c.Response())
-	log.Println(username)
+	password := c.FormValue("password")
+	err := auth.DoLogin(username, password, c)
+	if err != nil {
+		log.Print(err)
+		data := map[string]interface{}{
+			"Title": "Login",
+			"Error": err,
+		}
+		return c.Render(http.StatusOK, "login.html", data)
+	}
 	return c.Redirect(http.StatusFound, "/")
 }
 
@@ -30,18 +34,11 @@ func loginGet(c echo.Context) error {
 	return c.Render(http.StatusOK, "login.html", data)
 }
 
-func index(c echo.Context) error {
-	sess, _ := session.Get("session", c)
-	sess.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 7,
-		HttpOnly: true,
-	}
+func logoutGet(c echo.Context) error {
+	return auth.Logout(c)
+}
 
-	_, ok := sess.Values["user"]
-	if !ok {
-		return c.Redirect(http.StatusFound, "/login")
-	}
+func indexGet(c echo.Context) error {
 
 	data := map[string]interface{}{
 		"Title": "Lala",
@@ -49,7 +46,7 @@ func index(c echo.Context) error {
 	return c.Render(http.StatusOK, "index.html", data)
 }
 
-func work() error {
+func startServer() error {
 	e := echo.New()
 	renderer, err := renderer.NewRenderer("frontend/templates/*.html")
 	if err != nil {
@@ -59,30 +56,33 @@ func work() error {
 
 	logconf := middleware.DefaultLoggerConfig
 	logconf.Format = "${time_rfc3339_nano} ${id} ${remote_ip} ${host} ${method} ${uri} ${status} ${error} \n"
-
 	e.Use(middleware.LoggerWithConfig(logconf))
+
 	e.Use(middleware.Recover())
+
+	e.Use(middleware.Secure())
 
 	// e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
 	// 	TokenLookup: "header:X-XSRF-TOKEN",
 	// }))
 
-	cs := sessions.NewCookieStore(securecookie.GenerateRandomKey(24))
-	cs.MaxAge(20 * 60) // 20 minutes
-	e.Use(session.Middleware(cs))
+	cookiestore.Store.MaxAge(20 * 60)
+
+	e.Use(session.Middleware(cookiestore.Store))
 
 	e.Static("assets", "frontend/tabler/assets")
 	e.Static("/", "frontend")
 
-	e.GET("/", index, simpleauth.Middleware)
+	e.GET("/", indexGet, auth.Middleware)
+
 	e.GET("/login", loginGet)
 	e.POST("/login", loginPost)
-
+	e.GET("/logout", logoutGet)
 	return e.Start(":8000")
 }
 
 func main() {
-	err := work()
+	err := startServer()
 	if err != nil {
 		panic(err)
 	}

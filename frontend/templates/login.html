@@ -1,35 +1,42 @@
 {{template "head"}}
-<body class="">
-    <div class="page">
-      <div class="page-single">
-        <div class="container">
-          <div class="row">
-            <div class="col col-login mx-auto">
-              
-              <form class="card" action="login" method="post">
 
-                <div class="card-body p-6">
-                    <div class="text-center mb-6">
-                        <img src="./korra.png" class="h-9" alt="">                
-                      </div>
-                  <div class="card-title">{{text "Korra Login"}}</div>
-                  <div class="form-group">
-                    <label class="form-label">{{text "User:"}}</label>
-                    <input type="user" class="form-control" id="username" name="username" aria-describedby="" placeholder='{{text "Username"}}'>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">{{text "Password:"}}</label>
-                    <input type="password" class="form-control" id="password" placeholder="Password">
-                  </div>                  
-                  <div class="form-footer">
-                    <button type="submit" class="btn btn-primary btn-block">{{text "Login"}}</button>
-                  </div>
+<body class="">
+  <div class="page">
+    <div class="page-single">
+      <div class="container">
+        <div class="row">
+          <div class="col col-login mx-auto">
+
+            <form class="card" action="login" method="post">
+
+              <div class="card-body p-6">
+                <div class="text-center mb-6">
+                  <img src="./korra.png" class="h-9" alt="">
                 </div>
-              </form>              
-            </div>
+                <div class="card-title">{{text "Korra Login"}}</div>
+                <div class="form-group">
+                  <label class="form-label">{{text "User:"}}</label>
+                  <input type="user" class="form-control" id="username" name="username" aria-describedby="" placeholder='{{text "Username"}}'>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">{{text "Password:"}}</label>
+                  <input type="password" class="form-control" id="password" placeholder="Password">
+                </div>
+                <div class="form-footer">
+                  <button type="submit" class="btn btn-primary btn-block">{{text "Login"}}</button>
+                </div>
+                {{if .Error}}
+                <div class="alert alert-primary" role="alert">
+                  {{.Error}}
+                </div>
+                {{end}}
+              </div>
+            </form>
           </div>
         </div>
       </div>
     </div>
-  </body>
+  </div>
+</body>
+
 </html>

@@ -1,55 +1,47 @@
 package main
 
 import (
-	"github.com/dtylman/korra/auth"
-	"github.com/dtylman/korra/cookiestore"
-	"github.com/dtylman/korra/renderer"
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
+	"io/ioutil"
+	"log"
+	"strings"
+
+	"github.com/dtylman/gowd"
+	"github.com/dtylman/gowd/bootstrap"
 )
 
-func startServer() error {
-	e := echo.New()
-	renderer, err := renderer.NewRenderer("frontend/templates/*.html")
+var body *gowd.Element
+
+func run() error {
+	data, err := ioutil.ReadFile("content.html")
 	if err != nil {
 		return err
 	}
-	e.Renderer = renderer
 
-	logconf := middleware.DefaultLoggerConfig
-	logconf.Format = "${time_rfc3339_nano} ${id} ${remote_ip} ${host} ${method} ${uri} ${status} ${error} \n"
-	e.Use(middleware.LoggerWithConfig(logconf))
-
-	e.Use(middleware.Recover())
-
-	e.Use(middleware.Secure())
-
-	// e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
-	// 	TokenLookup: "header:X-XSRF-TOKEN",
-	// }))
-
-	cookiestore.MaxAge(20 * 60)
-
-	e.Use(cookiestore.Middleware())
-
-	e.Static("assets", "frontend/tabler/assets")
-	e.Static("/", "frontend")
-
-	e.GET("/", handleHomeGet, auth.Middleware)
-	e.GET("/settings", handleSettingsGet, auth.Middleware)
-	e.GET("/roles", handleRolesGet, auth.Middleware)
-
-	e.GET("/login", handleLoginGet)
-	e.POST("/login", handleLoginPost)
-	e.GET("/logout", handleLogoutGet)
-
-	return e.Start(":8000")
-}
-
-func main() {
-	err := startServer()
+	elements, err := gowd.ParseElements(strings.NewReader(string(data)), nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
+	body := bootstrap.NewContainer(true)
+	for _, elem := range elements {
+		body.AddElement(elem)
+	}
+	if err != nil {
+		return err
+	}
+	gowd.ExecJS(`$('#example').DataTable({
+		"oLanguage": {
+		  "oPaginate": {
+			"sNext": ">>",
+			"sPrevious": "<<",
+		  }
+		}
+	  });`)
+	//start the ui loop
+	return gowd.Run(body)
+}
+func main() {
+	err := run()
+	if err != nil {
+		log.Println(err)
+	}
 }

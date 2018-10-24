@@ -6,14 +6,8 @@ import (
 	"time"
 )
 
-// Options defines analyzer global options
-var Options struct {
-	// VerboseAssumeRoleEvents if true, will log AssumeRoleEvents when are processed
-	VerboseAssumeRoleEvents bool
-}
-
-//AssumeRole represents AssumeRole AssumeRole
-type AssumeRole struct {
+//AssumeRoleSession represents  AssumeRoleSession
+type AssumeRoleSession struct {
 	Session        string
 	AssumedRoleARN string
 	IPs            map[string]bool
@@ -21,41 +15,41 @@ type AssumeRole struct {
 	Raw            map[string]string
 }
 
-//Records holds a map off assume roles by arn
-var Records map[string]AssumeRole
+//Sessions holds a map off assume roles by arn
+var Sessions map[string]AssumeRoleSession
+
+//ErrorEvents are events with errors
+var ErrorEvents []Event
 
 //Analyze analyses the events
 func Analyze() error {
 	assumeRoleEvents := 0
 	compromisedEvents := 0
-	skipped := 0
-	Records = make(map[string]AssumeRole)
+	Sessions = make(map[string]AssumeRoleSession)
+	ErrorEvents = make([]Event, 0)
 
 	log.Printf("Analyzing %v events...", len(events))
 	sort.Sort(ByTime(events))
 	for _, e := range events {
 		if e.HasError() {
-			skipped++
+			ErrorEvents = append(ErrorEvents, e)
 			continue
 		}
 		if e.Name == "AssumeRole" {
 			estr, _ := e.JSONString()
-			if Options.VerboseAssumeRoleEvents {
-				log.Println(estr)
-			}
 			assumeRoleEvents++
 			arn := e.BuildAssumedRoleARN()
 			if arn == "" {
 				log.Println(e.JSONString())
 			}
-			r, ok := Records[arn]
+			r, ok := Sessions[arn]
 			if ok {
 				r.IPs[e.SourceIPAddress] = true
 				r.Time = e.Time
 				r.Raw[e.SourceIPAddress] = estr
-				Records[arn] = r
+				Sessions[arn] = r
 			} else {
-				Records[arn] = AssumeRole{
+				Sessions[arn] = AssumeRoleSession{
 					Session:        e.RequestParameters.RoleSessionName,
 					AssumedRoleARN: e.BuildAssumedRoleARN(),
 					IPs:            map[string]bool{e.SourceIPAddress: true},
@@ -64,7 +58,7 @@ func Analyze() error {
 				}
 			}
 		}
-		r, ok := Records[e.UserIdentity.ARN]
+		r, ok := Sessions[e.UserIdentity.ARN]
 		if ok {
 			_, ok = r.IPs[e.SourceIPAddress]
 			if !ok {
@@ -74,6 +68,6 @@ func Analyze() error {
 			}
 		}
 	}
-	log.Printf("Analyzed %v events, Skipped %v with error codes, found %v 'AssumeRole', %v suspicious", len(events), skipped, assumeRoleEvents, compromisedEvents)
+	log.Printf("Analyzed %v events, Skipped %v with error codes, found %v AssumeRole Session, %v suspicious", len(events), len(ErrorEvents), assumeRoleEvents, compromisedEvents)
 	return nil
 }

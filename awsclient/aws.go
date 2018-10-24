@@ -31,6 +31,12 @@ var Options struct {
 	MaxOnlineEvents int
 }
 
+//TotalRead total number of events read
+var TotalRead int
+
+//ProgressFunc defines a function for progress indication
+type ProgressFunc func(value int, total int)
+
 //NewSession creates new AWS session
 func NewSession() (*session.Session, error) {
 	log.Println("Creating AWS session...")
@@ -124,7 +130,7 @@ func DumpBucket(bucket string, basefolder string) error {
 }
 
 //Analayze downloads all items from cloud trail and analyzes them.
-func Analayze() error {
+func Analayze(progress ProgressFunc) error {
 	sess, err := NewSession()
 	if err != nil {
 		return err
@@ -136,7 +142,11 @@ func Analayze() error {
 		EndTime:    aws.Time(time.Now())}
 
 	needMore := true
-	totalEvents := 0
+	TotalRead = 0
+	if progress != nil {
+		progress(TotalRead, Options.MaxOnlineEvents)
+		defer progress(TotalRead, TotalRead)
+	}
 	for needMore {
 		resp, err := svc.LookupEvents(input)
 		if err != nil {
@@ -148,8 +158,8 @@ func Analayze() error {
 			continue
 		}
 		for _, object := range resp.Events {
-			totalEvents++
-			if totalEvents > Options.MaxOnlineEvents {
+			TotalRead++
+			if TotalRead >= Options.MaxOnlineEvents {
 				needMore = false
 				continue
 			}
@@ -162,8 +172,10 @@ func Analayze() error {
 				events.AddEvent(event)
 			}
 		}
-		log.Printf("Read %v events", totalEvents)
-
+		log.Printf("Read %v events", TotalRead)
+		if progress != nil {
+			progress(TotalRead, Options.MaxOnlineEvents)
+		}
 	}
 	return events.Analyze()
 }

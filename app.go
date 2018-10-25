@@ -48,13 +48,8 @@ func newApp() (*app, error) {
 	a.em["button-loadevents"].OnEvent(gowd.OnClick, a.buttonLoadEventsClicked)
 	a.em["menubutton_fetch"].OnEvent(gowd.OnClick, a.menuButttonFetchClicked)
 	a.em["menubutton_analyze"].OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
-	a.setContent(a.fetchCard)
+	a.content.SetElement(a.fetchCard)
 	return a, nil
-}
-
-func (a *app) setContent(content *gowd.Element) {
-	a.content.RemoveElements()
-	a.content.AddElement(content)
 }
 
 func (a *app) loadFromTemplate(name string) (*gowd.Element, error) {
@@ -85,12 +80,17 @@ func (a *app) run() error {
 	return gowd.Run(a.body)
 }
 
-func (a *app) showModal(sender *gowd.Element, event *gowd.EventElement) {
-	err := a.addFromTemplate(a.body, "modal.html")
-	if err != nil {
-		gowd.Alert(fmt.Sprintf("%v", err))
-	}
-	gowd.ExecJS(`$('#modal-notification').modal('show');`)
+//shows a modal dialog with the provided title and content
+func (a *app) showModal(title string, body *gowd.Element) {
+	a.em["modal-title"].SetText(title)
+	a.em["modal-body"].SetElement(body)
+	gowd.ExecJS(`$('#modal').modal('show');`)
+}
+
+func (a *app) errorLinkButtonClicked(sender *gowd.Element, event *gowd.EventElement) {
+	code := gowd.NewElement("code")
+	code.SetText(fmt.Sprintf("%v", sender.Object))
+	a.showModal("Error event", code)
 }
 
 func (a *app) menuButttonAnalyzeClicked(sender *gowd.Element, event *gowd.EventElement) {
@@ -98,26 +98,54 @@ func (a *app) menuButttonAnalyzeClicked(sender *gowd.Element, event *gowd.EventE
 	a.em["span-assume-role-session"].SetText(fmt.Sprintf("%v", len(events.Sessions)))
 	a.em["button-errros"].SetText(fmt.Sprintf("%v", len(events.ErrorEvents)))
 	tbodyErrors := a.em["tbody_errors"]
+	tbodyErrors.RemoveElements()
 	for _, ee := range events.ErrorEvents {
 		row := bootstrap.NewTableRow()
 		cell := gowd.NewElement("td")
 		link := bootstrap.NewLinkButton(ee.Name)
-		link.OnEvent(gowd.OnClick, a.showModal)
+		link.Object, _ = ee.JSONString()
+		link.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
 		cell.AddElement(link)
 		row.AddElement(cell)
 		row.AddCells(ee.Type, ee.ErrorCode)
 		tbodyErrors.AddElement(row.Element)
 	}
-
-	a.setContent(a.analyzeCard)
+	//gowd.ExecJS("$('#table-errors').DataTable();")
+	a.content.SetElement(a.analyzeCard)
 }
 
 func (a *app) menuButttonFetchClicked(sender *gowd.Element, event *gowd.EventElement) {
-	a.setContent(a.fetchCard)
+	a.content.SetElement(a.fetchCard)
+}
+
+//loads and analyzes events
+func (a *app) loadEvents() {
+	btnstop := a.em["button-loadevents-stop"]
+	btnstop.UnsetClass("disabled")
+	log.SetOutput(a)
+	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
+	defer func() {
+		a.em["button-loadevents"].UnsetClass("disabled")
+		btnstop.SetClass("disabled")
+		a.body.Render()
+	}()
+	err := awsclient.Analyze(a.onFetchProgress)
+	if err != nil {
+		gowd.Alert(fmt.Sprintf("%v", err))
+		return
+	}
+	html := `<p class="mt-3 mb-0 text-muted text-sm">
+	<span class="text-success mr-2"> <i class="fa fa-chart-line"></i> %v </span>
+	<span class="text-nowrap"> sessions loaded.</span></p>`
+	a.em["fetch-card-body"].AddHTML(fmt.Sprintf(html, len(events.Sessions)), nil)
+	link := bootstrap.NewLinkButton("Analyze")
+	link.SetClass("btn btn-sm btn-primary")
+	link.OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
+	a.em["fetch-card-body"].AddElement(link)
 }
 
 func (a *app) buttonLoadEventsClicked(sender *gowd.Element, event *gowd.EventElement) {
-	sender.SetClass("disabled")
+	a.em["button-loadevents"].SetClass("disabled")
 	awsclient.Options.Region = a.em["input-region"].GetValue()
 	var err error
 	awsclient.Options.MaxOnlineEvents, err = strconv.Atoi(a.em["input-maxevents"].GetValue())
@@ -125,36 +153,19 @@ func (a *app) buttonLoadEventsClicked(sender *gowd.Element, event *gowd.EventEle
 		gowd.Alert(fmt.Sprintf("%v", err))
 		return
 	}
-	go func() {
-		a.em["button-loadevents-stop"].UnsetClass("disabled")
-		log.SetOutput(a)
-		log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
-		defer func() {
-			sender.UnsetClass("disabled")
-			a.em["button-loadevents-stop"].SetClass("disabled")
-			a.body.Render()
-		}()
-		err := awsclient.Analayze(a.fetchProgress)
-		if err != nil {
-			gowd.Alert(fmt.Sprintf("%v", err))
-			return
-		}
-		if len(events.Sessions) == 0 {
-			log.Println("No assume roles events found")
-		} else {
-			// a.content.AddElement(a.tableCard)
-			// tbody := a.em["tbody-assume-role"]
-			// for _, are := range events.Records {
-			// 	tr := bootstrap.NewTableRow()
-			// 	tr.AddCells(are.AssumedRoleARN, fmt.Sprintf("%v", are.IPs), fmt.Sprintf("%v", are.Time), are.Session)
-			// 	tbody.AddElement(tr.Element)
-			// }
-		}
-	}()
+	progressRow := a.em["progress-row"]
+	progressRow.RemoveElements()
+	err = a.addFromTemplate(progressRow, "progress.html")
+	if err != nil {
+		gowd.Alert(fmt.Sprintf("%v", err))
+		return
+	}
 
+	go a.loadEvents()
 }
 
-func (a *app) fetchProgress(value int, total int) {
+//onFetchProgress handler for when fetch progress needs to be updated
+func (a *app) onFetchProgress(value int, total int) {
 	var percent int
 	if total == 0 {
 		percent = 0
@@ -165,6 +176,7 @@ func (a *app) fetchProgress(value int, total int) {
 	a.em["progress-bar-fetch"].SetAttribute("style", fmt.Sprintf("width: %v%%;", percent))
 }
 
+//Write is used for displaying `log` messages
 func (a *app) Write(p []byte) (n int, err error) {
 	a.em["span_progress"].SetText(string(p))
 	a.body.Render()

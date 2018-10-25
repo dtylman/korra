@@ -1,12 +1,13 @@
 {
-  "name": "Korra",
+  "name": "korra",
   "main": "index.html",
   "single-instance": true,
-  "window": {
-    "position": "center",
+  "window": {        
+    "frame" : true,    
+    "icon" : "assets/img/brand/korra-icon.png",
     "width": 1000,
-    "height": 800,
-    "frame" : true
+    "height": 600,
+    "position": "mouse"
   },
   "webkit": {
     "plugin": true

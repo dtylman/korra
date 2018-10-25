@@ -18,6 +18,10 @@ function body_message(msg) {
 }
 
 function start_process() {
+    if (os.platform().isWindows) {
+        goBinary += ".exe";
+    }
+    
     body_message("Loading...");
 
     const spawn = require('child_process').spawn;
@@ -118,9 +122,14 @@ function avoid_reload() {
     sessionStorage.setItem("loaded", "true");
 }
 
-if (os.platform().isWindows) {
-    goBinary += ".exe";
+
+function maximize_window(){
+    var ngui = require('nw.gui');
+    var nwin = ngui.Window.get();
+    nwin.show();
+    nwin.maximize();
 }
 
 avoid_reload();
+maximize_window();
 start_process();

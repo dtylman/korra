@@ -129,8 +129,9 @@ func DumpBucket(bucket string, basefolder string) error {
 	return nil
 }
 
-//Analayze downloads all items from cloud trail and analyzes them.
-func Analayze(progress ProgressFunc) error {
+//Analyze downloads all items from cloud trail and analyzes them.
+func Analyze(progress ProgressFunc) error {
+	events.Reset()
 	sess, err := NewSession()
 	if err != nil {
 		return err

@@ -9,8 +9,9 @@ import (
 
 	"github.com/dtylman/gowd"
 	"github.com/dtylman/gowd/bootstrap"
-	"github.com/dtylman/korra/awsclient"
-	"github.com/dtylman/korra/events"
+	"github.com/dtylman/korra/analyzer"
+	"github.com/dtylman/korra/analyzer/assumerole"
+	"github.com/dtylman/korra/analyzer/cloudtrail"
 )
 
 type app struct {
@@ -18,7 +19,6 @@ type app struct {
 	em          gowd.ElementsMap
 	content     *gowd.Element
 	fetchCard   *gowd.Element
-	tableCard   *gowd.Element
 	analyzeCard *gowd.Element
 }
 
@@ -28,10 +28,6 @@ func newApp() (*app, error) {
 	a.body = bootstrap.NewContainer(true)
 	var err error
 	a.fetchCard, err = a.loadFromTemplate("fetch.html")
-	if err != nil {
-		return nil, err
-	}
-	a.tableCard, err = a.loadFromTemplate("table.html")
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +42,8 @@ func newApp() (*app, error) {
 	a.content = a.em["main-content"]
 
 	a.em["button-loadevents"].OnEvent(gowd.OnClick, a.buttonLoadEventsClicked)
-	a.em["menubutton_fetch"].OnEvent(gowd.OnClick, a.menuButttonFetchClicked)
-	a.em["menubutton_analyze"].OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
+	a.em["menubutton-fetch"].OnEvent(gowd.OnClick, a.menuButttonFetchClicked)
+	a.em["menubutton-analyze"].OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
 	a.content.SetElement(a.fetchCard)
 	return a, nil
 }
@@ -93,23 +89,85 @@ func (a *app) errorLinkButtonClicked(sender *gowd.Element, event *gowd.EventElem
 	a.showModal("Error event", code)
 }
 
+/*
+ <table class="table align-items-center table-dark table-flush" id="table-assume-roles">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">ARN</th>
+                                <th scope="col">Issues</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-assume-role">
+                        </tbody>
+                    </table>
+                <!-- </div>
+                <div class="table-responsive"> -->
+                        <table class="table align-items-center table-dark table-flush" id="table-assume-roles">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">ARN</th>
+                                    <th scope="col">Issues</th>
+                                </tr>
+                            </thead>
+                        </table>
+                        <table class="table align-items-center table-dark table-flush">
+                                <tr>
+                                <th scope="col">Time</th>
+                                <th scope="col">Type</th>
+                                <th scope="col">IP</th>
+                                <th scope="col">User Agent</th>
+                                </tr>
+                        </table>
+					</div>*/
+
 func (a *app) menuButttonAnalyzeClicked(sender *gowd.Element, event *gowd.EventElement) {
-	a.em["span-total-read"].SetText(fmt.Sprintf("%v", awsclient.TotalRead))
-	a.em["span-assume-role-session"].SetText(fmt.Sprintf("%v", len(events.Sessions)))
-	a.em["button-errros"].SetText(fmt.Sprintf("%v", len(events.ErrorEvents)))
-	tbodyErrors := a.em["tbody_errors"]
-	tbodyErrors.RemoveElements()
-	for _, ee := range events.ErrorEvents {
-		row := bootstrap.NewTableRow()
-		cell := gowd.NewElement("td")
-		link := bootstrap.NewLinkButton(ee.Name)
-		link.Object, _ = ee.JSONString()
-		link.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
-		cell.AddElement(link)
-		row.AddElement(cell)
-		row.AddCells(ee.Type, ee.ErrorCode)
-		tbodyErrors.AddElement(row.Element)
+	a.em["span-total-read"].SetText(fmt.Sprintf("%v", analyzer.TotalRead))
+	a.em["span-assume-role-session"].SetText(fmt.Sprintf("%v", len(assumerole.Sessions)))
+	errorEvents := cloudtrail.ErrorEvents()
+	a.em["button-errros"].SetText(fmt.Sprintf("%v", len(errorEvents)))
+
+	tableErrors := bootstrap.NewTable("table align-items-center table-flush")
+	tableErrors.Head.SetClass("thead-dark")
+	tableErrors.AddHeader("Name").SetAttribute("scope", "col")
+	tableErrors.AddHeader("Type").SetAttribute("scope", "col")
+	tableErrors.AddHeader("Error").SetAttribute("scope", "col")
+	a.em["div-table-errors"].SetElement(tableErrors.Element)
+	for _, ee := range errorEvents {
+		row := tableErrors.AddRow()
+		// cell := gowd.NewElement("td")
+		// link := bootstrap.NewLinkButton(ee.Name)
+		// row.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
+		row.AddCells(ee.Name, ee.Type, ee.ErrorCode)
+		row.Object, _ = ee.JSONString()
+		row.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
 	}
+
+	a.em["div-table-assume-roles"].RemoveElements()
+	for _, ars := range assumerole.Sessions {
+		tar := bootstrap.NewTable("table align-items-center table-flush")
+		tar.Head.SetClass("thead-dark")
+		tar.AddHeader("Name").SetAttribute("scope", "col")
+		tar.AddHeader("ARN").SetAttribute("scope", "col")
+		tar.AddHeader("Issues").SetAttribute("scope", "col")
+		a.em["div-table-assume-roles"].AddElement(tar.Element)
+		row := tar.AddRow()
+		row.AddCells(ars.Name, ars.AssumedRoleARN, fmt.Sprintf("%v", ars.Issues))
+
+		tev := bootstrap.NewTable("table align-items-center table-flush")
+		tev.Head.SetClass("thead-dark")
+		tev.AddHeader("Time").SetAttribute("scope", "col")
+		tev.AddHeader("Type").SetAttribute("scope", "col")
+		tev.AddHeader("IP").SetAttribute("scope", "col")
+		tev.AddHeader("User Agent").SetAttribute("scope", "col")
+		a.em["div-table-assume-roles"].AddElement(tev.Element)
+		for _, e := range ars.Events {
+			row := tev.AddRow()
+			row.AddCells(fmt.Sprintf("%v", e.Time), e.Type, e.SourceIPAddress, e.UserAgent)
+		}
+	}
+
 	//gowd.ExecJS("$('#table-errors').DataTable();")
 	a.content.SetElement(a.analyzeCard)
 }
@@ -129,7 +187,7 @@ func (a *app) loadEvents() {
 		btnstop.SetClass("disabled")
 		a.body.Render()
 	}()
-	err := awsclient.Analyze(a.onFetchProgress)
+	err := analyzer.LoadAndAnalyze(a.onFetchProgress)
 	if err != nil {
 		gowd.Alert(fmt.Sprintf("%v", err))
 		return
@@ -137,7 +195,7 @@ func (a *app) loadEvents() {
 	html := `<p class="mt-3 mb-0 text-muted text-sm">
 	<span class="text-success mr-2"> <i class="fa fa-chart-line"></i> %v </span>
 	<span class="text-nowrap"> sessions loaded.</span></p>`
-	a.em["fetch-card-body"].AddHTML(fmt.Sprintf(html, len(events.Sessions)), nil)
+	a.em["fetch-card-body"].AddHTML(fmt.Sprintf(html, len(assumerole.Sessions)), nil)
 	link := bootstrap.NewLinkButton("Analyze")
 	link.SetClass("btn btn-sm btn-primary")
 	link.OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
@@ -146,9 +204,9 @@ func (a *app) loadEvents() {
 
 func (a *app) buttonLoadEventsClicked(sender *gowd.Element, event *gowd.EventElement) {
 	a.em["button-loadevents"].SetClass("disabled")
-	awsclient.Options.Region = a.em["input-region"].GetValue()
+	analyzer.Options.Region = a.em["input-region"].GetValue()
 	var err error
-	awsclient.Options.MaxOnlineEvents, err = strconv.Atoi(a.em["input-maxevents"].GetValue())
+	analyzer.Options.MaxOnlineEvents, err = strconv.Atoi(a.em["input-maxevents"].GetValue())
 	if err != nil {
 		gowd.Alert(fmt.Sprintf("%v", err))
 		return

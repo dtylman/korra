@@ -1,4 +1,4 @@
-package events
+package cloudtrail
 
 import (
 	"testing"

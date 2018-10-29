@@ -1,4 +1,4 @@
-package events
+package cloudtrail
 
 import (
 	"encoding/json"
@@ -75,19 +75,6 @@ type ByTime []Event
 func (a ByTime) Len() int           { return len(a) }
 func (a ByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByTime) Less(i, j int) bool { return a[i].Time.Before(a[j].Time) }
-
-//LoadedEvents all events that were loaded /read
-var LoadedEvents []Event
-
-//AddLog adds events from a log
-func AddLog(log Log) {
-	LoadedEvents = append(LoadedEvents, log.Records...)
-}
-
-//AddEvent adds one event
-func AddEvent(event Event) {
-	LoadedEvents = append(LoadedEvents, event)
-}
 
 // BuildAssumedRoleARN constructs assumed role ARN from event if applicable
 func (e *Event) BuildAssumedRoleARN() string {

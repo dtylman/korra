@@ -1,25 +1,29 @@
-package events
+package assumerole
 
-//AssumeRoleSession represents  AssumeRoleSession
-type AssumeRoleSession struct {
-	Session        string
+import (
+	"fmt"
+
+	"github.com/dtylman/korra/analyzer/cloudtrail"
+)
+
+//Session represents  Session
+type Session struct {
+	Name           string
 	AssumedRoleARN string
-	Events         []Event
+	Events         []cloudtrail.Event
+	Issues         []string
 }
 
-//Sessions holds a map off assume roles by arn
-var Sessions map[string]AssumeRoleSession
-
 //AddEvent adds event to session
-func (ars *AssumeRoleSession) AddEvent(e Event) {
+func (ars *Session) AddEvent(e cloudtrail.Event) {
 	if len(ars.Events) == 0 {
-		ars.Events = make([]Event, 0)
+		ars.Events = make([]cloudtrail.Event, 0)
 	}
 	ars.Events = append(ars.Events, e)
 }
 
 //HasSourceIP returns true if session has the given ip address
-func (ars *AssumeRoleSession) HasSourceIP(ip string) bool {
+func (ars *Session) HasSourceIP(ip string) bool {
 	for _, e := range ars.Events {
 		if e.SourceIPAddress == ip {
 			return true
@@ -37,7 +41,7 @@ func keysToStr(m map[string]bool) string {
 }
 
 //Users returns all users associated with this session
-func (ars *AssumeRoleSession) Users() string {
+func (ars *Session) Users() string {
 	var users map[string]bool
 	for _, e := range ars.Events {
 		users[e.UserIdentity.UserName] = true
@@ -46,10 +50,19 @@ func (ars *AssumeRoleSession) Users() string {
 }
 
 //IPs returns all source IP address associated with this session
-func (ars *AssumeRoleSession) IPs() string {
+func (ars *Session) IPs() string {
 	var ips map[string]bool
 	for _, e := range ars.Events {
 		ips[e.SourceIPAddress] = true
 	}
 	return keysToStr(ips)
+}
+
+//AddIssue adds analyzed issue to the session
+func (ars *Session) AddIssue(severity string, message string, args ...interface{}) {
+	if len(ars.Issues) == 0 {
+		ars.Issues = make([]string, 0)
+	}
+	msg := fmt.Sprintf("%v: %v", severity, fmt.Sprintf(message, args...))
+	ars.Issues = append(ars.Issues, msg)
 }

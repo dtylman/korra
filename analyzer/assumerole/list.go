@@ -27,16 +27,18 @@ func AddEvent(e cloudtrail.Event) error {
 			sess.AddEvent(e)
 			Sessions[arn] = sess
 		} else {
-			Sessions[arn] = Session{
+			sess = Session{
 				Name:           e.RequestParameters.RoleSessionName,
 				AssumedRoleARN: arn,
 			}
+			sess.AddEvent(e)
+			Sessions[arn] = sess
 		}
 	}
 	return nil
 }
 
-//Reset resets the sessions lists
-func Reset() {
+//Clear resets the sessions lists
+func Clear() {
 	Sessions = make(map[string]Session)
 }

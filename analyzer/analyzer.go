@@ -27,9 +27,6 @@ var Options struct {
 	MaxOnlineEvents int
 }
 
-//TotalRead total number of events read
-var TotalRead int
-
 //ProgressFunc defines a function for progress indication
 type ProgressFunc func(value int, total int)
 
@@ -42,10 +39,10 @@ type Analyzer interface {
 //Analyzers list of analyzers
 var Analyzers []Analyzer
 
-//Reset resets analyzer
-func Reset() {
-	cloudtrailevents.Reset()
-	assumerole.Reset()
+//Clear resets analyzer
+func Clear() {
+	cloudtrailevents.Clear()
+	assumerole.Clear()
 }
 
 //NewSession creates new AWS session
@@ -62,9 +59,9 @@ func NewSession() (*session.Session, error) {
 	return session.NewSession(conf)
 }
 
-// reads all events from cloudtrail and builds assumerole sessions
-func populate(progress ProgressFunc) error {
-	Reset()
+//Load reads all events from cloudtrail and builds assumerole sessions
+func Load(progress ProgressFunc) error {
+	Clear()
 	sess, err := NewSession()
 	if err != nil {
 		return err
@@ -76,10 +73,10 @@ func populate(progress ProgressFunc) error {
 		EndTime:    aws.Time(time.Now())}
 
 	needMore := true
-	TotalRead = 0
+	total := len(cloudtrailevents.Events)
 	if progress != nil {
-		progress(TotalRead, Options.MaxOnlineEvents)
-		defer progress(TotalRead, TotalRead)
+		progress(total, Options.MaxOnlineEvents)
+		defer progress(total, total)
 	}
 	for needMore {
 		resp, err := svc.LookupEvents(input)
@@ -92,8 +89,8 @@ func populate(progress ProgressFunc) error {
 			continue
 		}
 		for _, object := range resp.Events {
-			TotalRead++
-			if TotalRead >= Options.MaxOnlineEvents {
+			total = len(cloudtrailevents.Events)
+			if total >= Options.MaxOnlineEvents {
 				needMore = false
 				continue
 			}
@@ -106,11 +103,17 @@ func populate(progress ProgressFunc) error {
 				cloudtrailevents.AddEvent(event)
 			}
 		}
-		log.Printf("Read %v events", TotalRead)
+		log.Printf("Read %v events", total)
 		if progress != nil {
-			progress(TotalRead, Options.MaxOnlineEvents)
+			progress(total, Options.MaxOnlineEvents)
 		}
 	}
+	return nil
+}
+
+//Analyze runs analyzers on data
+func Analyze() error {
+	assumerole.Clear()
 
 	cloudtrailevents.Sort()
 	// build assume role sessions
@@ -120,22 +123,22 @@ func populate(progress ProgressFunc) error {
 			log.Println(err)
 		}
 	}
-	return nil
-}
-
-//LoadAndAnalyze resets analyzer, loads new data and perform all analysis
-func LoadAndAnalyze(progress ProgressFunc) error {
-	err := populate(progress)
-	if err != nil {
-		return err
-	}
 	for _, e := range cloudtrailevents.Events {
 		for _, a := range Analyzers {
-			err = a.Analyze(e)
+			err := a.Analyze(e)
 			if err != nil {
 				log.Printf("%v: %v", a.Name(), err)
 			}
 		}
 	}
 	return nil
+}
+
+//LoadAndAnalyze resets analyzer, loads new data and perform all analysis
+func LoadAndAnalyze(progress ProgressFunc) error {
+	err := Load(progress)
+	if err != nil {
+		return err
+	}
+	return Analyze()
 }

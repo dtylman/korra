@@ -15,11 +15,14 @@ import (
 )
 
 type app struct {
-	body        *gowd.Element
-	em          gowd.ElementsMap
-	content     *gowd.Element
-	fetchCard   *gowd.Element
-	analyzeCard *gowd.Element
+	body           *gowd.Element
+	em             gowd.ElementsMap
+	content        *gowd.Element
+	loadPage       *gowd.Element
+	sessionsPage   *gowd.Element
+	errorsPage     *gowd.Element
+	searchPage     *gowd.Element
+	assumerolePage *gowd.Element
 }
 
 func newApp() (*app, error) {
@@ -27,11 +30,19 @@ func newApp() (*app, error) {
 	a.em = gowd.NewElementMap()
 	a.body = bootstrap.NewContainer(true)
 	var err error
-	a.fetchCard, err = a.loadFromTemplate("fetch.html")
+	a.loadPage, err = a.loadFromTemplate("load.html")
 	if err != nil {
 		return nil, err
 	}
-	a.analyzeCard, err = a.loadFromTemplate("analyze.html")
+	a.sessionsPage, err = a.loadFromTemplate("sessions.html")
+	if err != nil {
+		return nil, err
+	}
+	a.errorsPage, err = a.loadFromTemplate("errors.html")
+	if err != nil {
+		return nil, err
+	}
+	a.assumerolePage, err = a.loadFromTemplate("assumerole.html")
 	if err != nil {
 		return nil, err
 	}
@@ -42,9 +53,13 @@ func newApp() (*app, error) {
 	a.content = a.em["main-content"]
 
 	a.em["button-loadevents"].OnEvent(gowd.OnClick, a.buttonLoadEventsClicked)
-	a.em["menubutton-fetch"].OnEvent(gowd.OnClick, a.menuButttonFetchClicked)
-	a.em["menubutton-analyze"].OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
-	a.content.SetElement(a.fetchCard)
+	a.em["menubutton-load"].OnEvent(gowd.OnClick, a.menuButttonLoadClicked)
+	a.em["menubutton-sessions"].OnEvent(gowd.OnClick, a.menuButttonSessionsClicked)
+	a.em["menubutton-search"].OnEvent(gowd.OnClick, a.menuButttonSearchClicked)
+
+	a.em["button-errros"].OnEvent(gowd.OnClick, a.menuButttonErrorsClicked)
+	a.em["menubutton-errors"].OnEvent(gowd.OnClick, a.menuButttonErrorsClicked)
+	a.content.SetElement(a.loadPage)
 	return a, nil
 }
 
@@ -72,6 +87,14 @@ func (a *app) addFromTemplate(parent *gowd.Element, name string) error {
 }
 
 func (a *app) run() error {
+	err := cloudtrail.Load()
+	if err != nil {
+		return err
+	}
+	err = analyzer.Analyze()
+	if err != nil {
+		return err
+	}
 	//start the ui loop
 	return gowd.Run(a.body)
 }
@@ -89,52 +112,19 @@ func (a *app) errorLinkButtonClicked(sender *gowd.Element, event *gowd.EventElem
 	a.showModal("Error event", code)
 }
 
-/*
- <table class="table align-items-center table-dark table-flush" id="table-assume-roles">
-                        <thead class="thead-dark">
-                            <tr>
-                                <th scope="col">Name</th>
-                                <th scope="col">ARN</th>
-                                <th scope="col">Issues</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-assume-role">
-                        </tbody>
-                    </table>
-                <!-- </div>
-                <div class="table-responsive"> -->
-                        <table class="table align-items-center table-dark table-flush" id="table-assume-roles">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th scope="col">Name</th>
-                                    <th scope="col">ARN</th>
-                                    <th scope="col">Issues</th>
-                                </tr>
-                            </thead>
-                        </table>
-                        <table class="table align-items-center table-dark table-flush">
-                                <tr>
-                                <th scope="col">Time</th>
-                                <th scope="col">Type</th>
-                                <th scope="col">IP</th>
-                                <th scope="col">User Agent</th>
-                                </tr>
-                        </table>
-					</div>*/
+func (a *app) menuButttonSearchClicked(sender *gowd.Element, event *gowd.EventElement) {
+	a.content.RemoveElements()
+}
 
-func (a *app) menuButttonAnalyzeClicked(sender *gowd.Element, event *gowd.EventElement) {
-	a.em["span-total-read"].SetText(fmt.Sprintf("%v", analyzer.TotalRead))
-	a.em["span-assume-role-session"].SetText(fmt.Sprintf("%v", len(assumerole.Sessions)))
-	errorEvents := cloudtrail.ErrorEvents()
-	a.em["button-errros"].SetText(fmt.Sprintf("%v", len(errorEvents)))
+func (a *app) menuButttonErrorsClicked(sender *gowd.Element, event *gowd.EventElement) {
 
 	tableErrors := bootstrap.NewTable("table align-items-center table-flush")
-	tableErrors.Head.SetClass("thead-dark")
 	tableErrors.AddHeader("Name").SetAttribute("scope", "col")
 	tableErrors.AddHeader("Type").SetAttribute("scope", "col")
 	tableErrors.AddHeader("Error").SetAttribute("scope", "col")
+	tableErrors.Head.SetAttribute("scope", "row")
 	a.em["div-table-errors"].SetElement(tableErrors.Element)
-	for _, ee := range errorEvents {
+	for _, ee := range cloudtrail.ErrorEvents() {
 		row := tableErrors.AddRow()
 		// cell := gowd.NewElement("td")
 		// link := bootstrap.NewLinkButton(ee.Name)
@@ -144,36 +134,65 @@ func (a *app) menuButttonAnalyzeClicked(sender *gowd.Element, event *gowd.EventE
 		row.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
 	}
 
-	a.em["div-table-assume-roles"].RemoveElements()
-	for _, ars := range assumerole.Sessions {
-		tar := bootstrap.NewTable("table align-items-center table-flush")
-		tar.Head.SetClass("thead-dark")
-		tar.AddHeader("Name").SetAttribute("scope", "col")
-		tar.AddHeader("ARN").SetAttribute("scope", "col")
-		tar.AddHeader("Issues").SetAttribute("scope", "col")
-		a.em["div-table-assume-roles"].AddElement(tar.Element)
-		row := tar.AddRow()
-		row.AddCells(ars.Name, ars.AssumedRoleARN, fmt.Sprintf("%v", ars.Issues))
+	a.content.SetElement(a.errorsPage)
+}
 
-		tev := bootstrap.NewTable("table align-items-center table-flush")
-		tev.Head.SetClass("thead-dark")
-		tev.AddHeader("Time").SetAttribute("scope", "col")
-		tev.AddHeader("Type").SetAttribute("scope", "col")
-		tev.AddHeader("IP").SetAttribute("scope", "col")
-		tev.AddHeader("User Agent").SetAttribute("scope", "col")
-		a.em["div-table-assume-roles"].AddElement(tev.Element)
-		for _, e := range ars.Events {
-			row := tev.AddRow()
-			row.AddCells(fmt.Sprintf("%v", e.Time), e.Type, e.SourceIPAddress, e.UserAgent)
-		}
+func (a *app) sessionClicked(sender *gowd.Element, event *gowd.EventElement) {
+	script := ` var nodes = new vis.DataSet([
+		{ id: 1, label: 'User: URI' },
+		{ id: 2, label: 'Amazon STS' },		
+	]);	
+	
+	var edges = new vis.DataSet([
+		{ from: 2, to: 1 },		
+		{ from: 1, to: 2, label: "test"}
+	]);
+	
+	
+	var container = document.getElementById('mynetwork');
+	var data = {
+		nodes: nodes,
+		edges: edges
+	};
+	var options = {};
+	var network = new vis.Network(container, data, options);`
+	gowd.ExecJS(script)
+	a.content.SetElement(a.assumerolePage)
+	// a.content.SetElement(gowd.NewText(fmt.Sprintf("%v", sender.Object)))
+}
+
+func (a *app) menuButttonSessionsClicked(sender *gowd.Element, event *gowd.EventElement) {
+	a.em["span-total-read"].SetText(fmt.Sprintf("%v", len(cloudtrail.Events)))
+	a.em["span-assume-role-session"].SetText(fmt.Sprintf("%v", len(assumerole.Sessions)))
+	errorEvents := cloudtrail.ErrorEvents()
+	a.em["button-errros"].SetText(fmt.Sprintf("%v", len(errorEvents)))
+
+	a.em["div-table-assume-roles"].RemoveElements()
+	tar := bootstrap.NewTable("table align-items-center table-flush")
+	tar.AddHeader("Time").SetAttribute("scope", "col")
+	tar.AddHeader("Name").SetAttribute("scope", "col")
+	tar.AddHeader("ARN").SetAttribute("scope", "col")
+	tar.Head.SetAttribute("scope", "row")
+	a.em["div-table-assume-roles"].AddElement(tar.Element)
+
+	for _, ars := range assumerole.Sessions {
+		link := bootstrap.NewLinkButton(ars.Name)
+		link.Object = ars
+		link.OnEvent(gowd.OnClick, a.sessionClicked)
+		cell := gowd.NewElement("td")
+		row := tar.AddRow()
+		row.AddCells(ars.Time())
+		cell.AddElement(link)
+		row.AddElement(cell)
+		row.AddCells(ars.AssumedRoleARN)
 	}
 
 	//gowd.ExecJS("$('#table-errors').DataTable();")
-	a.content.SetElement(a.analyzeCard)
+	a.content.SetElement(a.sessionsPage)
 }
 
-func (a *app) menuButttonFetchClicked(sender *gowd.Element, event *gowd.EventElement) {
-	a.content.SetElement(a.fetchCard)
+func (a *app) menuButttonLoadClicked(sender *gowd.Element, event *gowd.EventElement) {
+	a.content.SetElement(a.loadPage)
 }
 
 //loads and analyzes events
@@ -198,7 +217,7 @@ func (a *app) loadEvents() {
 	a.em["fetch-card-body"].AddHTML(fmt.Sprintf(html, len(assumerole.Sessions)), nil)
 	link := bootstrap.NewLinkButton("Analyze")
 	link.SetClass("btn btn-sm btn-primary")
-	link.OnEvent(gowd.OnClick, a.menuButttonAnalyzeClicked)
+	link.OnEvent(gowd.OnClick, a.menuButttonSessionsClicked)
 	a.em["fetch-card-body"].AddElement(link)
 }
 

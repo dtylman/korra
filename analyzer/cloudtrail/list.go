@@ -1,12 +1,17 @@
 package cloudtrail
 
-import "sort"
+import (
+	"encoding/json"
+	"io/ioutil"
+	"os"
+	"sort"
+)
 
 //Events holds the list of loaded events
 var Events []Event
 
-//Reset resets the list of loaded events
-func Reset() {
+//Clear resets the list of loaded events
+func Clear() {
 	Events = make([]Event, 0)
 }
 
@@ -29,4 +34,28 @@ func ErrorEvents() []Event {
 		}
 	}
 	return list
+}
+
+const eventsFilename = "korra.events.json"
+
+//Load loads events from file
+func Load() error {
+	_, err := os.Stat(eventsFilename)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	data, err := ioutil.ReadFile(eventsFilename)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &Events)
+}
+
+//Save persists all events to a local file
+func Save() error {
+	data, err := json.Marshal(Events)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(eventsFilename, data, 0644)
 }

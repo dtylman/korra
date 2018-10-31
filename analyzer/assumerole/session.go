@@ -66,3 +66,11 @@ func (ars *Session) AddIssue(severity string, message string, args ...interface{
 	msg := fmt.Sprintf("%v: %v", severity, fmt.Sprintf(message, args...))
 	ars.Issues = append(ars.Issues, msg)
 }
+
+//Time returne the sessions tarting time
+func (ars *Session) Time() string {
+	if len(ars.Events) == 0 {
+		return "err"
+	}
+	return fmt.Sprintf("%v", ars.Events[0].Time)
+}

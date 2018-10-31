@@ -138,24 +138,41 @@ func (a *app) menuButttonErrorsClicked(sender *gowd.Element, event *gowd.EventEl
 }
 
 func (a *app) sessionClicked(sender *gowd.Element, event *gowd.EventElement) {
-	script := ` var nodes = new vis.DataSet([
-		{ id: 1, label: 'User: URI' },
-		{ id: 2, label: 'Amazon STS' },		
-	]);	
-	
-	var edges = new vis.DataSet([
-		{ from: 2, to: 1 },		
-		{ from: 1, to: 2, label: "test"}
+	script := `var nodes = new vis.DataSet([
+		{ id: 1, label: 'User: URI', title: "Amazon" },
+		{ id: 2, label: 'Amazon STS' },
 	]);
-	
-	
+
+	var edges = new vis.DataSet([
+		{ from: 2, to: 1 , label: "got it", length: 400  },
+		{ from: 1, to: 2, label: "test", length: 400}
+	]);
+
 	var container = document.getElementById('mynetwork');
 	var data = {
 		nodes: nodes,
 		edges: edges
 	};
-	var options = {};
+	var options = {
+		layout: {
+			hierarchical: {
+				direction: "UD"
+			}
+		}
+	};
 	var network = new vis.Network(container, data, options);`
+	gowd.ExecJS(script)
+	script = `var container = document.getElementById('visualization');`
+	sess := sender.Object.(assumerole.Session)
+	script += `var items = [`
+	for i, e := range sess.Events {
+		script += fmt.Sprintf(`{id: %v, content: '%v', start: '%v'},`, i, e.SourceIPAddress, e.Time)
+
+	}
+	script += `];
+	var dataset = new vis.DataSet(items);
+	var options = {	};
+	var timeline = new vis.Timeline(container, items, options);`
 	gowd.ExecJS(script)
 	a.content.SetElement(a.assumerolePage)
 	// a.content.SetElement(gowd.NewText(fmt.Sprintf("%v", sender.Object)))

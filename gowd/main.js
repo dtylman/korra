@@ -14,7 +14,9 @@ function setPage(html) {
 }
 
 function body_message(msg) {
-    setPage('<h1>' + msg + '</h1>');
+    setPage('<div class="header pb-8 pt-5 pt-lg-8 d-flex align-items-center" style="min-height: 600px; background-image: url(./assets/img/brand/korra.png); background-size: cover; background-position: center;">'+
+    '<span class="mask bg-gradient-default opacity-8"></span><div class="container-fluid d-flex align-items-center"></div><div class="col-lg-7 col-md-10">'
+    +'<h1 class="display-2 text-white">'+msg+'</h1></div></div>');
 }
 
 function start_process() {
@@ -22,7 +24,7 @@ function start_process() {
         goBinary += ".exe";
     }
     
-    body_message("Loading...");
+    body_message("Loading...");    
 
     const spawn = require('child_process').spawn;
     child = spawn(goBinary, { maxBuffer: 1024 * 500 });
@@ -131,5 +133,5 @@ function maximize_window(){
 }
 
 avoid_reload();
-maximize_window();
 start_process();
+maximize_window();

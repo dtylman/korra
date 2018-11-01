@@ -38,8 +38,8 @@ func ErrorEvents() []Event {
 
 const eventsFilename = "korra.events.json"
 
-//Load loads events from file
-func Load() error {
+//LoadFromFile loads events from file
+func LoadFromFile() error {
 	_, err := os.Stat(eventsFilename)
 	if os.IsNotExist(err) {
 		return nil
@@ -51,8 +51,8 @@ func Load() error {
 	return json.Unmarshal(data, &Events)
 }
 
-//Save persists all events to a local file
-func Save() error {
+//SaveToFile persists all events to a local file
+func SaveToFile() error {
 	data, err := json.Marshal(Events)
 	if err != nil {
 		return err

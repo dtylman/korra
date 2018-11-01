@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blevesearch/bleve"
+	"github.com/blevesearch/bleve/analysis/char/html"
 	"github.com/dtylman/gowd"
 	"github.com/dtylman/gowd/bootstrap"
 	"github.com/dtylman/korra/analyzer"
@@ -23,13 +25,15 @@ type app struct {
 	errorsPage     *gowd.Element
 	searchPage     *gowd.Element
 	assumerolePage *gowd.Element
+	indexer        *analyzer.BleveAnalyzer
 }
 
 func newApp() (*app, error) {
 	a := new(app)
+	var err error
 	a.em = gowd.NewElementMap()
 	a.body = bootstrap.NewContainer(true)
-	var err error
+
 	a.loadPage, err = a.loadFromTemplate("load.html")
 	if err != nil {
 		return nil, err
@@ -46,12 +50,17 @@ func newApp() (*app, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.searchPage, err = a.loadFromTemplate("search.html")
+	if err != nil {
+		return nil, err
+	}
 	err = a.addFromTemplate(a.body, "body.html")
 	if err != nil {
 		return nil, err
 	}
 	a.content = a.em["main-content"]
 
+	a.em["button-search-go"].OnEvent(gowd.OnClick, a.buttonSearchClicked)
 	a.em["button-loadevents"].OnEvent(gowd.OnClick, a.buttonLoadEventsClicked)
 	a.em["menubutton-load"].OnEvent(gowd.OnClick, a.menuButttonLoadClicked)
 	a.em["menubutton-sessions"].OnEvent(gowd.OnClick, a.menuButttonSessionsClicked)
@@ -87,14 +96,23 @@ func (a *app) addFromTemplate(parent *gowd.Element, name string) error {
 }
 
 func (a *app) run() error {
-	err := cloudtrail.Load()
+	err := cloudtrail.LoadFromFile()
 	if err != nil {
 		return err
 	}
+	analyzer.AddAnalyzer(new(analyzer.AssumeRoleSessionAnalyzer))
+	a.indexer, err = analyzer.NewBleveAnalyzer("korra.db")
+	if err != nil {
+		return err
+	}
+	defer a.indexer.Close()
+	analyzer.AddAnalyzer(a.indexer)
+
 	err = analyzer.Analyze()
 	if err != nil {
 		return err
 	}
+
 	//start the ui loop
 	return gowd.Run(a.body)
 }
@@ -113,7 +131,7 @@ func (a *app) errorLinkButtonClicked(sender *gowd.Element, event *gowd.EventElem
 }
 
 func (a *app) menuButttonSearchClicked(sender *gowd.Element, event *gowd.EventElement) {
-	a.content.RemoveElements()
+	a.content.SetElement(a.searchPage)
 }
 
 func (a *app) menuButttonErrorsClicked(sender *gowd.Element, event *gowd.EventElement) {
@@ -236,6 +254,34 @@ func (a *app) loadEvents() {
 	link.SetClass("btn btn-sm btn-primary")
 	link.OnEvent(gowd.OnClick, a.menuButttonSessionsClicked)
 	a.em["fetch-card-body"].AddElement(link)
+}
+
+func (a *app) buttonSearchClicked(sender *gowd.Element, event *gowd.EventElement) {
+	input := a.em["input-search"]
+	term := input.GetValue()
+	input.AutoFocus()
+	input.SetValue("")
+	query := bleve.NewQueryStringQuery(term)
+	req := bleve.NewSearchRequest(query)
+	req.Highlight = bleve.NewHighlightWithStyle(html.Name)
+	sr, err := a.indexer.Index.Search(req)
+	if err != nil {
+		gowd.Alert(fmt.Sprintf("%v", err))
+		return
+	}
+
+	div := a.em["div-results"]
+	div.RemoveElements()
+	div.AddHTML(sr.String(), nil)
+
+	for _, hit := range sr.Hits {
+		dr := gowd.NewElement("div")
+		dr.AddHTML(hit.String(), nil)
+		dr.AddHTML("</br>", nil)
+		//div.AddElement(gowd.NewText(fmt.Sprintf("%v", doc.Document)))
+		div.AddElement(dr)
+	}
+
 }
 
 func (a *app) buttonLoadEventsClicked(sender *gowd.Element, event *gowd.EventElement) {

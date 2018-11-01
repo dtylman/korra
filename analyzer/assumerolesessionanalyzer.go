@@ -5,10 +5,12 @@ import (
 	"github.com/dtylman/korra/analyzer/cloudtrail"
 )
 
-type assumeRoleSessionAnalyzer struct {
+//AssumeRoleSessionAnalyzer ...
+type AssumeRoleSessionAnalyzer struct {
 }
 
-func (ars *assumeRoleSessionAnalyzer) Analyze(e *cloudtrail.Event) error {
+//Analyze ...
+func (ars *AssumeRoleSessionAnalyzer) Analyze(e cloudtrail.Event) error {
 	sess, ok := assumerole.Sessions[e.UserIdentity.ARN]
 	if ok {
 		if !sess.HasSourceIP(e.SourceIPAddress) {
@@ -20,4 +22,9 @@ func (ars *assumeRoleSessionAnalyzer) Analyze(e *cloudtrail.Event) error {
 		}
 	}
 	return nil
+}
+
+//Name ...
+func (ars *AssumeRoleSessionAnalyzer) Name() string {
+	return "AssumeRoleSessionAnalyzer"
 }

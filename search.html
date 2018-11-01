@@ -1,0 +1,27 @@
+<div>
+    <div class="row">
+        <div class="col-xl-12 order-xl-1">
+            <div class="card bg-secondary shadow">
+                <div class="card-header bg-white border-0">
+                    <div class="row align-items-center">
+                        <div class="col-8">
+                            <h3 class="mb-0">Search</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body container-fluid">
+                    <div class="form-row align-items-center">
+                        <div class="col-8">
+                            <input class="form-control" type="search" id="input-search" placeholder="Search..." value=""
+                                onkeydown="if (event.keyCode == 13) document.getElementById('button-search-go').click();">
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-primary" id="button-search-go">Go</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="div-results"></div>
+</div>

@@ -39,6 +39,14 @@ type Analyzer interface {
 //Analyzers list of analyzers
 var Analyzers []Analyzer
 
+//AddAnalyzer adds an analyzer
+func AddAnalyzer(a Analyzer) {
+	if Analyzers == nil {
+		Analyzers = make([]Analyzer, 0)
+	}
+	Analyzers = append(Analyzers, a)
+}
+
 //Clear resets analyzer
 func Clear() {
 	cloudtrailevents.Clear()
@@ -116,6 +124,7 @@ func Analyze() error {
 	assumerole.Clear()
 
 	cloudtrailevents.Sort()
+
 	// build assume role sessions
 	for _, e := range cloudtrailevents.Events {
 		err := assumerole.AddEvent(e)

@@ -1,17 +1,16 @@
-package analyzer
+package assumerole
 
 import (
-	"github.com/dtylman/korra/analyzer/assumerole"
 	"github.com/dtylman/korra/analyzer/cloudtrail"
 )
 
-//AssumeRoleSessionAnalyzer ...
-type AssumeRoleSessionAnalyzer struct {
+//SessionAnalyzer ...
+type SessionAnalyzer struct {
 }
 
 //Analyze ...
-func (ars *AssumeRoleSessionAnalyzer) Analyze(e cloudtrail.Event) error {
-	sess, ok := assumerole.Sessions[e.UserIdentity.ARN]
+func (sa *SessionAnalyzer) Analyze(e cloudtrail.Event) error {
+	sess, ok := Sessions[e.UserIdentity.ARN]
 	if ok {
 		if !sess.HasSourceIP(e.SourceIPAddress) {
 			sess.AddIssue("", "ARN '%v' used from an IP address '%v' but was never assigned to. User: '%v', User agent: '%v'",
@@ -25,6 +24,11 @@ func (ars *AssumeRoleSessionAnalyzer) Analyze(e cloudtrail.Event) error {
 }
 
 //Name ...
-func (ars *AssumeRoleSessionAnalyzer) Name() string {
+func (sa *SessionAnalyzer) Name() string {
 	return "AssumeRoleSessionAnalyzer"
+}
+
+// Clear ...
+func (sa *SessionAnalyzer) Clear() error {
+	return nil
 }

@@ -34,6 +34,7 @@ type ProgressFunc func(value int, total int)
 type Analyzer interface {
 	Analyze(event cloudtrailevents.Event) error
 	Name() string
+	Clear() error
 }
 
 //Analyzers list of analyzers
@@ -51,6 +52,12 @@ func AddAnalyzer(a Analyzer) {
 func Clear() {
 	cloudtrailevents.Clear()
 	assumerole.Clear()
+	for _, a := range Analyzers {
+		err := a.Clear()
+		if err != nil {
+			log.Println(err)
+		}
+	}
 }
 
 //NewSession creates new AWS session
@@ -120,7 +127,7 @@ func Load(progress ProgressFunc) error {
 }
 
 //Analyze runs analyzers on data
-func Analyze() error {
+func Analyze(progress ProgressFunc) error {
 	assumerole.Clear()
 
 	cloudtrailevents.Sort()
@@ -132,7 +139,9 @@ func Analyze() error {
 			log.Println(err)
 		}
 	}
-	for _, e := range cloudtrailevents.Events {
+	total := len(cloudtrailevents.Events)
+	for i, e := range cloudtrailevents.Events {
+		progress(i, total)
 		for _, a := range Analyzers {
 			err := a.Analyze(e)
 			if err != nil {
@@ -149,5 +158,5 @@ func LoadAndAnalyze(progress ProgressFunc) error {
 	if err != nil {
 		return err
 	}
-	return Analyze()
+	return Analyze(progress)
 }

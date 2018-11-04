@@ -100,19 +100,13 @@ func (a *app) run() error {
 	if err != nil {
 		return err
 	}
-	analyzer.AddAnalyzer(new(analyzer.AssumeRoleSessionAnalyzer))
+	analyzer.AddAnalyzer(new(assumerole.SessionAnalyzer))
 	a.indexer, err = analyzer.NewBleveAnalyzer("korra.db")
 	if err != nil {
 		return err
 	}
 	defer a.indexer.Close()
 	analyzer.AddAnalyzer(a.indexer)
-
-	err = analyzer.Analyze()
-	if err != nil {
-		return err
-	}
-
 	//start the ui loop
 	return gowd.Run(a.body)
 }
@@ -272,16 +266,49 @@ func (a *app) buttonSearchClicked(sender *gowd.Element, event *gowd.EventElement
 
 	div := a.em["div-results"]
 	div.RemoveElements()
-	div.AddHTML(sr.String(), nil)
-
-	for _, hit := range sr.Hits {
-		dr := gowd.NewElement("div")
-		dr.AddHTML(hit.String(), nil)
-		dr.AddHTML("</br>", nil)
-		//div.AddElement(gowd.NewText(fmt.Sprintf("%v", doc.Document)))
-		div.AddElement(dr)
+	err = a.addFromTemplate(div, "search-results.html")
+	if err != nil {
+		gowd.Alert(fmt.Sprintf("%v", err))
 	}
 
+	summary := fmt.Sprintf("%d matches, showing %d through %d, took %s\n", sr.Total, sr.Request.From+1, sr.Request.From+len(sr.Hits), sr.Took)
+	a.em["text-search-summary"].SetText(summary)
+	divsr := a.em["div-sr"]
+	/*
+
+	       <p>lalalal</p>
+	   </div>
+	   <hr>*/
+	for i, hit := range sr.Hits {
+		html := fmt.Sprintf(`<div class="card-body"><h4 class="heading-small text-muted mb-4">%5d. %s (%f)</h4>`, i+sr.Request.From+1, hit.ID, hit.Score)
+
+		for fragmentField, fragments := range hit.Fragments {
+			html += fmt.Sprintf("<p><strong>%s:</strong>", fragmentField)
+			for _, fragment := range fragments {
+				html += fmt.Sprintf("%s</p>", fragment)
+			}
+		}
+		for otherFieldName, otherFieldValue := range hit.Fields {
+			if _, ok := hit.Fragments[otherFieldName]; !ok {
+				html += fmt.Sprintf("<p><strong>%s:</strong>", otherFieldName)
+				html += fmt.Sprintf("%v</p>", otherFieldValue)
+			}
+		}
+		html += "<hr>"
+		divsr.AddHTML(html, nil)
+	}
+	// if len(sr.Facets) > 0 {
+	// 	html += fmt.Sprintf("Facets:\n")
+	// 	for fn, f := range sr.Facets {
+	// 		html += fmt.Sprintf("%s(%d)\n", fn, f.Total)
+	// 		for _, t := range f.Terms {
+	// 			hmtl += fmt.Sprintf("\t%s(%d)\n", t.Term, t.Count)
+	// 		}
+	// 		if f.Other != 0 {
+	// 			html += fmt.Sprintf("\tOther(%d)\n", f.Other)
+	// 		}
+	// 	}
+	// }
 }
 
 func (a *app) buttonLoadEventsClicked(sender *gowd.Element, event *gowd.EventElement) {

@@ -67,6 +67,7 @@ type Event struct {
 	Resources          []Resource        `json:"resources"`
 	Type               string            `json:"eventType"`
 	RecipientAccountID string            `json:"recipientAccountId"`
+	RawEvent           string            `json:"raw"`
 }
 
 // ByTime sorts events by time
@@ -97,8 +98,8 @@ func (e *Event) BuildAssumedRoleARN() string {
 }
 
 //JSONString exports event as a JSON string
-func (e *Event) JSONString() (string, error) {
-	data, err := json.MarshalIndent(e, "", " ")
+func (e *Event) JSONString(prefix, indent string) (string, error) {
+	data, err := json.MarshalIndent(e, prefix, indent)
 	if err != nil {
 		return "", err
 	}

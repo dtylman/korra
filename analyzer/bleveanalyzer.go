@@ -48,7 +48,14 @@ func (ba *BleveAnalyzer) Name() string {
 
 //Clear ...
 func (ba *BleveAnalyzer) Clear() error {
+	ba.Close()
 	var err error
+	if ba.path != "" {
+		err = os.RemoveAll(ba.path)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	ba.Index, err = bleve.New(ba.path, bleve.NewIndexMapping())
 	return err
 }

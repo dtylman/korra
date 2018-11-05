@@ -111,6 +111,7 @@ func Load(progress ProgressFunc) error {
 			}
 			raw := aws.StringValue(object.CloudTrailEvent)
 			var event cloudtrailevents.Event
+			event.RawEvent = raw
 			err := json.Unmarshal([]byte(raw), &event)
 			if err != nil {
 				log.Println(err)
@@ -128,10 +129,16 @@ func Load(progress ProgressFunc) error {
 
 //Analyze runs analyzers on data
 func Analyze(progress ProgressFunc) error {
+	defer log.Println("Done")
 	assumerole.Clear()
-
 	cloudtrailevents.Sort()
 
+	for _, a := range Analyzers {
+		err := a.Clear()
+		if err != nil {
+			return err
+		}
+	}
 	// build assume role sessions
 	for _, e := range cloudtrailevents.Events {
 		err := assumerole.AddEvent(e)
@@ -139,6 +146,7 @@ func Analyze(progress ProgressFunc) error {
 			log.Println(err)
 		}
 	}
+	log.Println("Indexing...")
 	total := len(cloudtrailevents.Events)
 	for i, e := range cloudtrailevents.Events {
 		progress(i, total)
@@ -158,5 +166,9 @@ func LoadAndAnalyze(progress ProgressFunc) error {
 	if err != nil {
 		return err
 	}
-	return Analyze(progress)
+	err = Analyze(progress)
+	if err != nil {
+		return err
+	}
+	return cloudtrailevents.SaveToFile()
 }

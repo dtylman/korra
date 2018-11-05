@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -100,6 +101,7 @@ func (a *app) run() error {
 	if err != nil {
 		return err
 	}
+	defer cloudtrail.SaveToFile()
 	analyzer.AddAnalyzer(new(assumerole.SessionAnalyzer))
 	a.indexer, err = analyzer.NewBleveAnalyzer("korra.db")
 	if err != nil {
@@ -119,9 +121,10 @@ func (a *app) showModal(title string, body *gowd.Element) {
 }
 
 func (a *app) errorLinkButtonClicked(sender *gowd.Element, event *gowd.EventElement) {
-	code := gowd.NewElement("code")
-	code.SetText(fmt.Sprintf("%v", sender.Object))
-	a.showModal("Error event", code)
+	a.em["div-event"].RemoveElements()
+	a.em["div-event"].AddHTML(fmt.Sprintf("<code>%v</code>", sender.Object), nil)
+	gowd.ExecJS("hljs.highlightBlock(document.getElementById('div-event'));")
+	gowd.ExecJS("$('#table-errors').DataTable();")
 }
 
 func (a *app) menuButttonSearchClicked(sender *gowd.Element, event *gowd.EventElement) {
@@ -131,6 +134,7 @@ func (a *app) menuButttonSearchClicked(sender *gowd.Element, event *gowd.EventEl
 func (a *app) menuButttonErrorsClicked(sender *gowd.Element, event *gowd.EventElement) {
 
 	tableErrors := bootstrap.NewTable("table align-items-center table-flush")
+	tableErrors.SetID("table-errors")
 	tableErrors.AddHeader("Name").SetAttribute("scope", "col")
 	tableErrors.AddHeader("Type").SetAttribute("scope", "col")
 	tableErrors.AddHeader("Error").SetAttribute("scope", "col")
@@ -138,14 +142,14 @@ func (a *app) menuButttonErrorsClicked(sender *gowd.Element, event *gowd.EventEl
 	a.em["div-table-errors"].SetElement(tableErrors.Element)
 	for _, ee := range cloudtrail.ErrorEvents() {
 		row := tableErrors.AddRow()
-		// cell := gowd.NewElement("td")
-		// link := bootstrap.NewLinkButton(ee.Name)
-		// row.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
-		row.AddCells(ee.Name, ee.Type, ee.ErrorCode)
-		row.Object, _ = ee.JSONString()
-		row.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
+		link := bootstrap.NewLinkButton(ee.Name)
+		json, _ := ee.JSONString("<br>", "&nbsp;&nbsp;")
+		json = base64.StdEncoding.EncodeToString([]byte(json))
+		link.SetAttribute("onclick", fmt.Sprintf("set_code('div-event','%v');", json))
+		row.AddElement(bootstrap.NewElement("td", "", link))
+		row.AddCells(ee.Type, ee.ErrorCode)
 	}
-
+	gowd.ExecJS("$('#table-errors').DataTable({'pageLength': 5});")
 	a.content.SetElement(a.errorsPage)
 }
 
@@ -226,13 +230,11 @@ func (a *app) menuButttonLoadClicked(sender *gowd.Element, event *gowd.EventElem
 
 //loads and analyzes events
 func (a *app) loadEvents() {
-	btnstop := a.em["button-loadevents-stop"]
-	btnstop.UnsetClass("disabled")
 	log.SetOutput(a)
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 	defer func() {
 		a.em["button-loadevents"].UnsetClass("disabled")
-		btnstop.SetClass("disabled")
+		a.onFetchProgress(100, 100)
 		a.body.Render()
 	}()
 	err := analyzer.LoadAndAnalyze(a.onFetchProgress)
@@ -248,6 +250,24 @@ func (a *app) loadEvents() {
 	link.SetClass("btn btn-sm btn-primary")
 	link.OnEvent(gowd.OnClick, a.menuButttonSessionsClicked)
 	a.em["fetch-card-body"].AddElement(link)
+}
+
+func (a *app) createDocLink(docid string) *gowd.Element {
+	doc, err := a.indexer.Index.Document(docid)
+	if err != nil {
+		return gowd.NewText(fmt.Sprintf("%v", err))
+	}
+	text := ""
+	for _, f := range doc.Fields {
+		text += fmt.Sprintf("%v:%v; ", f.Name(), string(f.Value()))
+		if len(text) > 100 {
+			break
+		}
+	}
+	link := bootstrap.NewLinkButton(text[:100])
+	link.Object = fmt.Sprintf("%v - lala", doc.GoString())
+	link.OnEvent(gowd.OnClick, a.errorLinkButtonClicked)
+	return link
 }
 
 func (a *app) buttonSearchClicked(sender *gowd.Element, event *gowd.EventElement) {
@@ -274,28 +294,32 @@ func (a *app) buttonSearchClicked(sender *gowd.Element, event *gowd.EventElement
 	summary := fmt.Sprintf("%d matches, showing %d through %d, took %s\n", sr.Total, sr.Request.From+1, sr.Request.From+len(sr.Hits), sr.Took)
 	a.em["text-search-summary"].SetText(summary)
 	divsr := a.em["div-sr"]
-	/*
 
-	       <p>lalalal</p>
-	   </div>
-	   <hr>*/
 	for i, hit := range sr.Hits {
-		html := fmt.Sprintf(`<div class="card-body"><h4 class="heading-small text-muted mb-4">%5d. %s (%f)</h4>`, i+sr.Request.From+1, hit.ID, hit.Score)
-
+		link := a.createDocLink(hit.ID)
+		header := bootstrap.NewElement("h4", "heading-small mb-4")
+		header.AddElement(gowd.NewText(fmt.Sprintf("#%v", i)))
+		header.AddHTML("&nbsp;", nil)
+		header.AddElement(link)
+		header.AddHTML("&nbsp;", nil)
+		header.AddElement(gowd.NewStyledText(fmt.Sprintf("(%f)", hit.Score), gowd.ItalicText))
+		dr := bootstrap.NewElement("div", "card-body", header)
+		//link.OnEvent(gowd.OnClick, a.buttonSearchClicked)
 		for fragmentField, fragments := range hit.Fragments {
-			html += fmt.Sprintf("<p><strong>%s:</strong>", fragmentField)
+			dr.AddElement(gowd.NewStyledText(fragmentField, gowd.StrongText))
 			for _, fragment := range fragments {
-				html += fmt.Sprintf("%s</p>", fragment)
+				dr.AddHTML(fragment, nil)
 			}
 		}
 		for otherFieldName, otherFieldValue := range hit.Fields {
 			if _, ok := hit.Fragments[otherFieldName]; !ok {
-				html += fmt.Sprintf("<p><strong>%s:</strong>", otherFieldName)
-				html += fmt.Sprintf("%v</p>", otherFieldValue)
+				dr.AddElement(gowd.NewStyledText(otherFieldName, gowd.StrongText))
+				dr.AddElement(gowd.NewText(fmt.Sprintf("%v", otherFieldValue)))
 			}
 		}
-		html += "<hr>"
-		divsr.AddHTML(html, nil)
+		divsr.AddElement(dr)
+		divsr.AddElement(gowd.NewElement("hr"))
+
 	}
 	// if len(sr.Facets) > 0 {
 	// 	html += fmt.Sprintf("Facets:\n")
@@ -341,6 +365,7 @@ func (a *app) onFetchProgress(value int, total int) {
 	}
 	a.em["span_progress_percentage"].SetText(fmt.Sprintf("%v%%", percent))
 	a.em["progress-bar-fetch"].SetAttribute("style", fmt.Sprintf("width: %v%%;", percent))
+	a.body.Render()
 }
 
 //Write is used for displaying `log` messages

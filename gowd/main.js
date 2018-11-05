@@ -132,6 +132,13 @@ function maximize_window(){
     nwin.maximize();
 }
 
+// sets and highlights html as code
+function set_code(div, html){    
+    obj = document.getElementById(div);
+    obj.innerHTML="<code>"+window.atob(html)+"</code>";
+    hljs.highlightBlock(obj);	
+}
+
 avoid_reload();
 start_process();
 maximize_window();
